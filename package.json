@@ -1,0 +1,9 @@
+{
+  "name":"rana-whatsapp-bot",
+  "version":"1.0.0",
+  "private":true,
+  "type":"module",
+  "scripts":{"start":"node server.js"},
+  "engines":{"node":">=20"},
+  "dependencies":{"@whiskeysockets/baileys":"latest","dotenv":"latest","express":"latest","pino":"latest","qrcode":"latest"}
+}
