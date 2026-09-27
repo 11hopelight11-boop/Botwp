@@ -12,7 +12,20 @@ const app = express();
 
 const PORT = Number(process.env.PORT || 10000);
 const PREFIX = process.env.BOT_PREFIX || '!rana';
-const SESSION_DIR = process.env.SESSION_DIR || '/tmp/rana-session';
+const SESSION_DIR =
+  process.env.SESSION_DIR || '/tmp/rana-session';
+
+/*
+  Jamendo client ID
+
+  Render Environment mein:
+  JAMENDO_CLIENT_ID=your_client_id
+
+  Testing ke liye Jamendo ka public test
+  client ID use kiya ja sakta hai.
+*/
+const JAMENDO_CLIENT_ID =
+  process.env.JAMENDO_CLIENT_ID || '709fa152';
 
 fs.mkdirSync(SESSION_DIR, { recursive: true });
 fs.mkdirSync('./logs', { recursive: true });
@@ -20,24 +33,39 @@ fs.mkdirSync('./logs', { recursive: true });
 app.use(express.json());
 app.use(express.static('public'));
 
+/* =========================
+   STATE
+========================= */
+
 const state = {
   status: 'STARTING',
   qr: null,
   pairingCode: null,
+
   attempts: 0,
   maxAttempts: 20,
+
   connectedAt: null,
+
   commands: 0,
   songs: 0,
   aiReplies: 0,
   messages: 0,
+
   lastActivity: null,
+
   logs: [],
   members: {},
+
   error: null
 };
 
+/* =========================
+   LOG
+========================= */
+
 function log(type, msg, meta = {}) {
+
   const item = {
     time: new Date().toISOString(),
     type,
@@ -46,37 +74,71 @@ function log(type, msg, meta = {}) {
   };
 
   state.logs.unshift(item);
-  state.logs = state.logs.slice(0, 80);
-  state.lastActivity = item.time;
+
+  state.logs =
+    state.logs.slice(0, 80);
+
+  state.lastActivity =
+    item.time;
 
   try {
+
     fs.appendFileSync(
       './logs/activity.log',
       JSON.stringify(item) + '\n'
     );
+
   } catch {}
 
-  console.log(`[${type}] ${msg}`, meta);
+  console.log(
+    `[${type}] ${msg}`,
+    meta
+  );
 }
 
+/* =========================
+   RESET LINK
+========================= */
+
 function resetLink() {
+
   state.qr = null;
   state.pairingCode = null;
   state.attempts = 0;
 }
 
+/* =========================
+   CLEAN NAME
+========================= */
+
 function cleanName(name) {
-  return String(name || 'friend')
-    .replace(/[\r\n]/g, ' ')
+
+  return String(
+    name || 'friend'
+  )
+    .replace(
+      /[\r\n]/g,
+      ' '
+    )
     .trim() || 'friend';
 }
 
+/* =========================
+   MEMBERS
+========================= */
+
 function addMember(jid, name) {
+
   if (!jid) return;
 
   if (!state.members[jid]) {
+
     state.members[jid] = {
-      name: name || jid.split('@')[0],
+
+      name:
+        name ||
+        jid.split('@')[0],
+
       messages: 0,
       commands: 0,
       lastSeen: null
@@ -84,11 +146,15 @@ function addMember(jid, name) {
   }
 
   if (name) {
-    state.members[jid].name = name;
+
+    state.members[jid].name =
+      name;
   }
 
   state.members[jid].messages++;
-  state.members[jid].lastSeen = new Date().toISOString();
+
+  state.members[jid].lastSeen =
+    new Date().toISOString();
 }
 
 /* =========================
@@ -96,43 +162,79 @@ function addMember(jid, name) {
 ========================= */
 
 function localReply(query, user) {
-  const q = query.trim();
-  const l = q.toLowerCase();
-  const name = cleanName(user);
+
+  const q =
+    query.trim();
+
+  const l =
+    q.toLowerCase();
+
+  const name =
+    cleanName(user);
 
   const jokes = [
+
     `😂 ${name} bhai, ye sawal group mein daal ke tumne Rana ko judge bana diya.`,
+
     `🤣 ${name}, iska jawab dene se pehle chai zaroori hai ☕`,
+
     `😎 ${name} bhai, Rana investigation mode ON 🔎`,
+
     `😂 Oho ${name}! Ye kya pooch liya?`,
+
     `🤖 Rana ne sawal receive kar liya... ab group ki izzat tumhare haath mein hai 😂`,
+
     `😅 ${name}, iska jawab thora Bamb style mein aayega 😎`
   ];
 
-  if (/\b(hello|hi|salam|assalam|aoa)\b/i.test(l)) {
+  if (
+    /\b(hello|hi|salam|assalam|aoa)\b/i
+      .test(l)
+  ) {
+
     return `👋 Wa Alaikum Assalam ${name} bhai ❤️
 Rana online hai 😎 Batao kya scene hai?`;
   }
 
-  if (/\b(kesa|kaisa|ks|how)\b.*\b(ho|hai|hain)\b/i.test(l)) {
+  if (
+    /\b(kesa|kaisa|ks|how)\b.*\b(ho|hai|hain)\b/i
+      .test(l)
+  ) {
+
     return `😎 ${name} bhai, Rana bilkul fit!
 Tum sunao, group ka kya haal hai? 😂`;
   }
 
-  if (/\b(kahan|kidr|kidhar)\b/i.test(l)) {
+  if (
+    /\b(kahan|kidr|kidhar)\b/i
+      .test(l)
+  ) {
+
     return `📍 ${name} bhai, location department se confirmation mangwa raha hoon 😂
 Jis bande ka naam liya hai usko tag karke pooch lo 😎`;
   }
 
-  if (/\b(kya kha|khhya|khaya|khana)\b/i.test(l)) {
+  if (
+    /\b(kya kha|khhya|khaya|khana)\b/i
+      .test(l)
+  ) {
+
     return `🍽️ ${name} bhai, khane ka sawal hai to Rana ka jawab hamesha: biryani 😂🔥`;
   }
 
-  if (/\b(acha|theek|ok|okay)\b/i.test(l)) {
+  if (
+    /\b(acha|theek|ok|okay)\b/i
+      .test(l)
+  ) {
+
     return `👍 Theek hai ${name} bhai 😎 Rana standby par hai.`;
   }
 
-  if (/\b(pyar|love|mohabbat)\b/i.test(l)) {
+  if (
+    /\b(pyar|love|mohabbat)\b/i
+      .test(l)
+  ) {
+
     return `❤️ ${name} bhai, mohabbat ka case hai...
 Rana lawyer nahi, witness hai 😂`;
   }
@@ -140,7 +242,8 @@ Rana lawyer nahi, witness hai 😂`;
   const index =
     Math.abs(
       [...q].reduce(
-        (a, c) => a + c.charCodeAt(0),
+        (a, c) =>
+          a + c.charCodeAt(0),
         0
       )
     ) % jokes.length;
@@ -151,6 +254,215 @@ Rana lawyer nahi, witness hai 😂`;
 }
 
 /* =========================
+   JAMENDO SEARCH
+========================= */
+
+async function searchJamendoSong(name) {
+
+  /*
+    Punjabi/Hindi terms ke saath
+    multiple searches.
+
+    Mainstream Bollywood/Punjabi
+    songs guaranteed nahi hain.
+  */
+
+  const searches = [
+
+    `${name} punjabi`,
+
+    `${name} hindi`,
+
+    name
+  ];
+
+  let allTracks = [];
+
+  for (
+    const term of searches
+  ) {
+
+    const url =
+      `https://api.jamendo.com/v3.0/tracks/` +
+      `?client_id=${encodeURIComponent(JAMENDO_CLIENT_ID)}` +
+      `&format=json` +
+      `&limit=20` +
+      `&search=${encodeURIComponent(term)}` +
+      `&audioformat=mp32` +
+      `&audiodlformat=mp32`;
+
+    const response =
+      await fetch(url, {
+        headers: {
+          'User-Agent':
+            'Rana-WhatsApp-Bot/1.0'
+        }
+      });
+
+    if (!response.ok) {
+
+      throw new Error(
+        `Jamendo HTTP ${response.status}`
+      );
+    }
+
+    const data =
+      await response.json();
+
+    if (
+      Array.isArray(
+        data.results
+      )
+    ) {
+
+      allTracks.push(
+        ...data.results
+      );
+    }
+  }
+
+  /*
+    Remove duplicates
+  */
+
+  const unique =
+    Array.from(
+      new Map(
+        allTracks.map(
+          track => [
+            String(track.id),
+            track
+          ]
+        )
+      ).values()
+    );
+
+  /*
+    IMPORTANT:
+    Sirf download-allowed tracks.
+  */
+
+  const downloadable =
+    unique.filter(
+      track =>
+        (
+          track.audiodownload_allowed === true ||
+          track.audiodownload_allowed === 'true'
+        ) &&
+        track.audiodownload
+    );
+
+  if (
+    !downloadable.length
+  ) {
+
+    return null;
+  }
+
+  /*
+    Exact-ish matching.
+  */
+
+  const wanted =
+    name
+      .toLowerCase()
+      .replace(
+        /[^\p{L}\p{N}\s]/gu,
+        ''
+      )
+      .trim();
+
+  const exact =
+    downloadable.find(
+      track => {
+
+        const title =
+          String(
+            track.name || ''
+          )
+            .toLowerCase()
+            .replace(
+              /[^\p{L}\p{N}\s]/gu,
+              ''
+            );
+
+        return (
+          title.includes(wanted) ||
+          wanted.includes(title)
+        );
+      }
+    );
+
+  return (
+    exact ||
+    downloadable[0]
+  );
+}
+
+/* =========================
+   DOWNLOAD JAMENDO MP3
+========================= */
+
+async function downloadJamendoMP3(track) {
+
+  if (
+    !track ||
+    !track.audiodownload
+  ) {
+
+    throw new Error(
+      'Download URL available nahi hai'
+    );
+  }
+
+  const response =
+    await fetch(
+      track.audiodownload,
+      {
+        headers: {
+          'User-Agent':
+            'Rana-WhatsApp-Bot/1.0'
+        }
+      }
+    );
+
+  if (!response.ok) {
+
+    throw new Error(
+      `MP3 download HTTP ${response.status}`
+    );
+  }
+
+  const buffer =
+    Buffer.from(
+      await response.arrayBuffer()
+    );
+
+  if (!buffer.length) {
+
+    throw new Error(
+      'MP3 file empty hai'
+    );
+  }
+
+  /*
+    WhatsApp safety limit.
+  */
+
+  if (
+    buffer.length >
+    20 * 1024 * 1024
+  ) {
+
+    throw new Error(
+      'MP3 20MB se bari hai'
+    );
+  }
+
+  return buffer;
+}
+
+/* =========================
    WHATSAPP
 ========================= */
 
@@ -158,9 +470,11 @@ let sock;
 let starting = false;
 
 async function startBot() {
+
   if (starting) return;
 
   starting = true;
+
   state.error = null;
   state.status = 'STARTING';
 
@@ -170,23 +484,40 @@ async function startBot() {
   );
 
   try {
+
     const {
       state: authState,
       saveCreds
-    } = await useMultiFileAuthState(SESSION_DIR);
+    } =
+      await useMultiFileAuthState(
+        SESSION_DIR
+      );
 
-    sock = makeWASocket({
-      auth: authState,
-      logger: P({ level: 'silent' }),
-      printQRInTerminal: false,
-      browser: [
-        'Rana WhatsApp Bot',
-        'Chrome',
-        '1.0'
-      ],
-      markOnlineOnConnect: false,
-      connectTimeoutMs: 60000
-    });
+    sock =
+      makeWASocket({
+
+        auth: authState,
+
+        logger:
+          P({
+            level: 'silent'
+          }),
+
+        printQRInTerminal:
+          false,
+
+        browser: [
+          'Rana WhatsApp Bot',
+          'Chrome',
+          '1.0'
+        ],
+
+        markOnlineOnConnect:
+          false,
+
+        connectTimeoutMs:
+          60000
+      });
 
     sock.ev.on(
       'creds.update',
@@ -204,11 +535,17 @@ async function startBot() {
         console.log(
           '[CONNECTION]',
           connection,
-          qr ? 'QR received' : ''
+          qr
+            ? 'QR received'
+            : ''
         );
 
+        /* QR */
+
         if (qr) {
+
           try {
+
             state.qr =
               await QRCode.toDataURL(
                 qr,
@@ -218,9 +555,14 @@ async function startBot() {
                 }
               );
 
-            state.pairingCode = null;
-            state.status = 'SCAN_QR';
-            state.error = null;
+            state.pairingCode =
+              null;
+
+            state.status =
+              'SCAN_QR';
+
+            state.error =
+              null;
 
             log(
               'QR',
@@ -228,7 +570,9 @@ async function startBot() {
             );
 
           } catch (e) {
-            state.error = e.message;
+
+            state.error =
+              e.message;
 
             log(
               'ERROR',
@@ -237,12 +581,20 @@ async function startBot() {
           }
         }
 
-        if (connection === 'open') {
-          state.status = 'CONNECTED';
+        /* CONNECTED */
+
+        if (
+          connection === 'open'
+        ) {
+
+          state.status =
+            'CONNECTED';
+
           state.connectedAt =
             new Date().toISOString();
 
-          state.error = null;
+          state.error =
+            null;
 
           resetLink();
 
@@ -254,13 +606,20 @@ async function startBot() {
           starting = false;
         }
 
-        if (connection === 'close') {
+        /* CLOSED */
 
-          state.status = 'DISCONNECTED';
+        if (
+          connection === 'close'
+        ) {
+
+          state.status =
+            'DISCONNECTED';
 
           const code =
-            lastDisconnect?.error
-              ?.output?.statusCode;
+            lastDisconnect
+              ?.error
+              ?.output
+              ?.statusCode;
 
           log(
             'SYSTEM',
@@ -277,13 +636,14 @@ async function startBot() {
 
             setTimeout(
               () =>
-                startBot().catch(
-                  e =>
-                    log(
-                      'ERROR',
-                      e.message
-                    )
-                ),
+                startBot()
+                  .catch(
+                    e =>
+                      log(
+                        'ERROR',
+                        e.message
+                      )
+                  ),
               3000
             );
 
@@ -307,25 +667,38 @@ async function startBot() {
 
     sock.ev.on(
       'messages.upsert',
-      async ({ messages }) => {
+      async ({
+        messages
+      }) => {
 
-        for (const m of messages) {
+        for (
+          const m of messages
+        ) {
 
           try {
 
             if (
               !m.message ||
               m.key.fromMe
-            ) continue;
+            ) {
+              continue;
+            }
 
             const jid =
-              m.key.remoteJid || '';
+              m.key.remoteJid ||
+              '';
 
-            /* GROUP ONLY */
+            /*
+              GROUP ONLY
+            */
 
             if (
-              !jid.endsWith('@g.us')
-            ) continue;
+              !jid.endsWith(
+                '@g.us'
+              )
+            ) {
+              continue;
+            }
 
             const sender =
               m.key.participant ||
@@ -337,13 +710,21 @@ async function startBot() {
                 sender.split('@')[0]
               );
 
-            const text = (
-              m.message.conversation ||
-              m.message.extendedTextMessage?.text ||
-              ''
-            ).trim();
+            const text =
+              (
+                m.message
+                  .conversation ||
 
-            if (!text) continue;
+                m.message
+                  .extendedTextMessage
+                  ?.text ||
+
+                ''
+              ).trim();
+
+            if (!text) {
+              continue;
+            }
 
             state.messages++;
 
@@ -352,7 +733,9 @@ async function startBot() {
               senderName
             );
 
-            /* NORMAL MESSAGE IGNORE */
+            /*
+              NORMAL MESSAGE IGNORE
+            */
 
             if (
               !text
@@ -360,11 +743,16 @@ async function startBot() {
                 .startsWith(
                   PREFIX.toLowerCase()
                 )
-            ) continue;
+            ) {
+
+              continue;
+            }
 
             const query =
               text
-                .slice(PREFIX.length)
+                .slice(
+                  PREFIX.length
+                )
                 .trim();
 
             state.commands++;
@@ -377,15 +765,20 @@ async function startBot() {
               'COMMAND',
               query || 'help',
               {
-                sender: senderName,
-                group: jid
+                sender:
+                  senderName,
+
+                group:
+                  jid
               }
             );
 
             const lower =
               query.toLowerCase();
 
-            /* HELP */
+            /* =========================
+               HELP
+            ========================= */
 
             if (
               lower === 'help' ||
@@ -402,7 +795,7 @@ ${PREFIX} <sawal>
 ➡️ Funny/smart reply
 
 ${PREFIX} song <name>
-➡️ Free music preview
+➡️ Full authorized MP3
 
 ${PREFIX} help
 ➡️ Commands
@@ -411,9 +804,11 @@ Example:
 
 ${PREFIX} Ali kaha hai?
 
-${PREFIX} song Tum Hi Ho`
+${PREFIX} song Punjabi`
                 },
-                { quoted: m }
+                {
+                  quoted: m
+                }
               );
 
               continue;
@@ -425,7 +820,9 @@ ${PREFIX} song Tum Hi Ho`
 
             if (
               lower === 'song' ||
-              lower.startsWith('song ')
+              lower.startsWith(
+                'song '
+              )
             ) {
 
               const name =
@@ -442,9 +839,13 @@ ${PREFIX} song Tum Hi Ho`
 `🎵 Song ka naam bhejo.
 
 Example:
-${PREFIX} song Tum Hi Ho`
+
+${PREFIX} song Punjabi
+${PREFIX} song Hindi`
                   },
-                  { quoted: m }
+                  {
+                    quoted: m
+                  }
                 );
 
                 continue;
@@ -452,10 +853,9 @@ ${PREFIX} song Tum Hi Ho`
 
               state.songs++;
 
-              const q =
-                encodeURIComponent(name);
-
-              /* SEARCHING MESSAGE */
+              /*
+                SEARCHING
+              */
 
               await sock.sendMessage(
                 jid,
@@ -463,50 +863,23 @@ ${PREFIX} song Tum Hi Ho`
                   text:
 `🔎 🎵 ${name}
 
-Rana song dhoond raha hai...`
+Rana full MP3 dhoond raha hai...`
                 },
-                { quoted: m }
+                {
+                  quoted: m
+                }
               );
 
               try {
 
                 /*
-                  FREE PUBLIC APPLE
-                  iTunes Search API
-
-                  No API key.
+                  SEARCH JAMENDO
                 */
 
-                const searchUrl =
-                  `https://itunes.apple.com/search?term=${q}&media=music&entity=song&limit=10`;
-
-                const response =
-                  await fetch(
-                    searchUrl,
-                    {
-                      headers: {
-                        'User-Agent':
-                          'Rana-WhatsApp-Bot/1.0'
-                      }
-                    }
-                  );
-
-                if (!response.ok) {
-                  throw new Error(
-                    `Music search HTTP ${response.status}`
-                  );
-                }
-
-                const data =
-                  await response.json();
-
                 const track =
-                  (data.results || [])
-                    .find(
-                      x => x.previewUrl
-                    );
-
-                /* NO PREVIEW */
+                  await searchJamendoSong(
+                    name
+                  );
 
                 if (!track) {
 
@@ -514,107 +887,93 @@ Rana song dhoond raha hai...`
                     jid,
                     {
                       text:
-`😕 ${name} ka playable preview nahi mila.
+`😕 "${name}" ka full downloadable track nahi mila.
 
-▶️ YouTube:
-https://www.youtube.com/results?search_query=${q}
-
-🎧 Spotify:
-https://open.spotify.com/search/${q}`
+⚠️ Jamendo par sirf woh tracks download kiye ja sakte hain jinke artist ne downloading allow ki ho.`
                     },
-                    { quoted: m }
+                    {
+                      quoted: m
+                    }
                   );
 
                   log(
                     'SONG',
-                    `No preview found: ${name}`,
+                    `No downloadable track: ${name}`,
                     {
-                      sender: senderName,
-                      group: jid
+                      sender:
+                        senderName,
+
+                      group:
+                        jid
                     }
                   );
 
                   continue;
                 }
 
-                /* DOWNLOAD PREVIEW */
-
-                const audioResponse =
-                  await fetch(
-                    track.previewUrl,
-                    {
-                      headers: {
-                        'User-Agent':
-                          'Rana-WhatsApp-Bot/1.0'
-                      }
-                    }
-                  );
-
-                if (!audioResponse.ok) {
-                  throw new Error(
-                    `Audio HTTP ${audioResponse.status}`
-                  );
-                }
-
-                const audioBuffer =
-                  Buffer.from(
-                    await audioResponse.arrayBuffer()
-                  );
-
-                if (
-                  !audioBuffer.length
-                ) {
-                  throw new Error(
-                    'Audio file empty hai'
-                  );
-                }
-
-                if (
-                  audioBuffer.length >
-                  20 * 1024 * 1024
-                ) {
-                  throw new Error(
-                    'Audio 20MB se bari hai'
-                  );
-                }
-
                 const title =
-                  track.trackName ||
+                  track.name ||
                   name;
 
                 const artist =
-                  track.artistName ||
+                  track.artist_name ||
                   'Unknown artist';
 
                 /*
-                  SEND AUDIO TO WHATSAPP
+                  DOWNLOAD FULL MP3
+                */
+
+                const audioBuffer =
+                  await downloadJamendoMP3(
+                    track
+                  );
+
+                /*
+                  SEND DIRECTLY
+                  TO WHATSAPP
                 */
 
                 await sock.sendMessage(
                   jid,
                   {
-                    audio: audioBuffer,
+                    audio:
+                      audioBuffer,
+
                     mimetype:
-                      'audio/mp4',
-                    ptt: false,
+                      'audio/mpeg',
+
+                    ptt:
+                      false,
+
                     fileName:
-                      `${title}.m4a`,
+                      `${title}.mp3`,
+
                     caption:
 `🎵 ${title}
 👤 ${artist}
 
-⚠️ Official music preview`
+✅ Full downloadable audio`
                   },
-                  { quoted: m }
+                  {
+                    quoted: m
+                  }
                 );
 
                 log(
                   'AUDIO',
-                  `Song preview sent: ${title}`,
+                  `Full MP3 sent: ${title}`,
                   {
-                    sender: senderName,
-                    group: jid,
-                    artist
+                    sender:
+                      senderName,
+
+                    group:
+                      jid,
+
+                    artist:
+                      artist,
+
+                    duration:
+                      track.duration
                   }
                 );
 
@@ -624,23 +983,25 @@ https://open.spotify.com/search/${q}`
                   jid,
                   {
                     text:
-`❌ Audio send nahi ho saki.
+`❌ Song send nahi ho saka.
 
 Error:
-${e.message}
-
-▶️ YouTube search:
-https://www.youtube.com/results?search_query=${q}`
+${e.message}`
                   },
-                  { quoted: m }
+                  {
+                    quoted: m
+                  }
                 );
 
                 log(
                   'ERROR',
-                  `Song preview failed: ${e.message}`,
+                  `Song failed: ${e.message}`,
                   {
-                    sender: senderName,
-                    group: jid
+                    sender:
+                      senderName,
+
+                    group:
+                      jid
                   }
                 );
               }
@@ -658,24 +1019,33 @@ https://www.youtube.com/results?search_query=${q}`
                 senderName
               );
 
-            if (reply.usedAI) {
+            if (
+              reply.usedAI
+            ) {
+
               state.aiReplies++;
             }
 
             await sock.sendMessage(
               jid,
               {
-                text: reply.text
+                text:
+                  reply.text
               },
-              { quoted: m }
+              {
+                quoted: m
+              }
             );
 
             log(
               'REPLY',
               'Reply sent',
               {
-                sender: senderName,
-                group: jid
+                sender:
+                  senderName,
+
+                group:
+                  jid
               }
             );
 
@@ -694,7 +1064,8 @@ https://www.youtube.com/results?search_query=${q}`
 
     starting = false;
 
-    state.status = 'ERROR';
+    state.status =
+      'ERROR';
 
     state.error =
       e?.stack ||
@@ -708,13 +1079,14 @@ https://www.youtube.com/results?search_query=${q}`
 
     setTimeout(
       () =>
-        startBot().catch(
-          err =>
-            log(
-              'ERROR',
-              err.message
-            )
-        ),
+        startBot()
+          .catch(
+            err =>
+              log(
+                'ERROR',
+                err.message
+              )
+          ),
       5000
     );
   }
@@ -729,16 +1101,23 @@ async function aiReply(
   user
 ) {
 
+  /*
+    FREE LOCAL MODE
+  */
+
   if (
     !process.env.OPENAI_API_KEY
   ) {
 
     return {
-      usedAI: false,
-      text: localReply(
-        query,
-        user
-      )
+      usedAI:
+        false,
+
+      text:
+        localReply(
+          query,
+          user
+        )
     };
   }
 
@@ -748,7 +1127,8 @@ async function aiReply(
       await fetch(
         'https://api.openai.com/v1/responses',
         {
-          method: 'POST',
+          method:
+            'POST',
 
           headers: {
             'Content-Type':
@@ -758,12 +1138,14 @@ async function aiReply(
               `Bearer ${process.env.OPENAI_API_KEY}`
           },
 
-          body: JSON.stringify({
-            model:
-              process.env.OPENAI_MODEL ||
-              'gpt-5.6-luna',
+          body:
+            JSON.stringify({
 
-            input:
+              model:
+                process.env.OPENAI_MODEL ||
+                'gpt-5.6-luna',
+
+              input:
 `You are Rana, a funny friendly WhatsApp group bot.
 
 Reply naturally in Roman Urdu/Hinglish.
@@ -774,7 +1156,7 @@ Question:
 ${query}
 
 Keep it short, friendly and contextual.`
-          })
+            })
         }
       );
 
@@ -782,6 +1164,7 @@ Keep it short, friendly and contextual.`
       await r.json();
 
     if (!r.ok) {
+
       throw new Error(
         data?.error?.message ||
         `OpenAI HTTP ${r.status}`
@@ -789,7 +1172,10 @@ Keep it short, friendly and contextual.`
     }
 
     return {
-      usedAI: true,
+
+      usedAI:
+        true,
+
       text:
         data.output_text ||
         localReply(
@@ -801,7 +1187,10 @@ Keep it short, friendly and contextual.`
   } catch {
 
     return {
-      usedAI: false,
+
+      usedAI:
+        false,
+
       text:
         localReply(
           query,
@@ -812,16 +1201,19 @@ Keep it short, friendly and contextual.`
 }
 
 /* =========================
-   DASHBOARD
+   DASHBOARD STATE
 ========================= */
 
 app.get(
   '/api/state',
-  (req, res) =>
+  (req, res) => {
+
     res.json({
+
       ...state,
 
-      qr: !!state.qr,
+      qr:
+        !!state.qr,
 
       members:
         Object.values(
@@ -832,24 +1224,43 @@ app.get(
               b.commands -
               a.commands
           )
-          .slice(0, 10)
-    })
+          .slice(
+            0,
+            10
+          )
+    });
+  }
 );
+
+/* =========================
+   QR API
+========================= */
 
 app.get(
   '/api/qr',
-  (req, res) =>
+  (req, res) => {
+
     res.json({
-      qr: state.qr,
+
+      qr:
+        state.qr,
+
       pairingCode:
         state.pairingCode,
-      status: state.status,
+
+      status:
+        state.status,
+
       attempts:
         state.attempts,
+
       maxAttempts:
         state.maxAttempts,
-      error: state.error
-    })
+
+      error:
+        state.error
+    });
+  }
 );
 
 /* =========================
@@ -863,6 +1274,7 @@ app.post(
     try {
 
       if (!sock) {
+
         return res
           .status(503)
           .json({
@@ -875,6 +1287,7 @@ app.post(
         state.status ===
         'CONNECTED'
       ) {
+
         return res.json({
           status:
             'CONNECTED'
@@ -883,13 +1296,16 @@ app.post(
 
       const phone =
         String(
-          req.body.phone || ''
-        ).replace(
-          /\D/g,
+          req.body.phone ||
           ''
-        );
+        )
+          .replace(
+            /\D/g,
+            ''
+          );
 
       if (!phone) {
+
         return res
           .status(400)
           .json({
@@ -902,6 +1318,7 @@ app.post(
         state.attempts >=
         state.maxAttempts
       ) {
+
         resetLink();
       }
 
@@ -912,8 +1329,12 @@ app.post(
           phone
         );
 
-      state.pairingCode = code;
-      state.qr = null;
+      state.pairingCode =
+        code;
+
+      state.qr =
+        null;
+
       state.status =
         'PAIRING_CODE';
 
@@ -927,8 +1348,10 @@ app.post(
       );
 
       res.json({
+
         pairingCode:
           code,
+
         attempts:
           state.attempts
       });
@@ -961,8 +1384,13 @@ app.post(
     try {
 
       if (sock) {
+
         try {
-          sock.end(undefined);
+
+          sock.end(
+            undefined
+          );
+
         } catch {}
       }
 
@@ -971,11 +1399,15 @@ app.post(
           SESSION_DIR
         )
       ) {
+
         fs.rmSync(
           SESSION_DIR,
           {
-            recursive: true,
-            force: true
+            recursive:
+              true,
+
+            force:
+              true
           }
         );
       }
@@ -985,7 +1417,8 @@ app.post(
       state.status =
         'STARTING';
 
-      state.error = null;
+      state.error =
+        null;
 
       log(
         'SYSTEM',
@@ -994,18 +1427,20 @@ app.post(
 
       setTimeout(
         () =>
-          startBot().catch(
-            e =>
-              log(
-                'ERROR',
-                e.message
-              )
-          ),
+          startBot()
+            .catch(
+              e =>
+                log(
+                  'ERROR',
+                  e.message
+                )
+            ),
         500
       );
 
       res.json({
-        ok: true
+        ok:
+          true
       });
 
     } catch (e) {
@@ -1026,14 +1461,20 @@ app.post(
 
 app.get(
   '/health',
-  (req, res) =>
+  (req, res) => {
+
     res.json({
-      ok: true,
+
+      ok:
+        true,
+
       status:
         state.status,
+
       error:
         state.error
-    })
+    });
+  }
 );
 
 /* =========================
@@ -1054,12 +1495,13 @@ app.listen(
       `Dashboard listening on ${PORT}`
     );
 
-    startBot().catch(
-      e =>
-        log(
-          'ERROR',
-          e.message
-        )
-    );
+    startBot()
+      .catch(
+        e =>
+          log(
+            'ERROR',
+            e.message
+          )
+      );
   }
 );
